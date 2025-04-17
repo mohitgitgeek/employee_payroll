@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Payroll Management System</title>
+  <style>
+    /* Your CSS goes here */
+    body { font-family: Arial, sans-serif; background: #f8f9fa; }
+    .container { max-width: 900px; margin: 40px auto; background: #fff; padding: 30px; border-radius: 8px; box-shadow: 0 2px 8px #ccc; }
+    h2 { margin-bottom: 20px; }
+    table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
+    th, td { border: 1px solid #ddd; padding: 8px; }
+    th { background: #f1f1f1; }
+    .btn { padding: 6px 12px; border: none; border-radius: 4px; cursor: pointer; }
+    .btn-primary { background: #007bff; color: #fff; }
+    .btn-warning { background: #ffc107; color: #333; }
+    .btn-danger { background: #dc3545; color: #fff; }
+    .alert { padding: 10px; margin-bottom: 15px; border-radius: 4px; }
+    .alert-success { background: #d4edda; color: #155724; }
+    .alert-danger { background: #f8d7da; color: #721c24; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h2>Payroll Management System</h2>
+    <div id="alerts"></div>
+    <div id="main-menu">
+      <button class="btn btn-primary" onclick="showAddForm()">Add New Account</button>
+      <button class="btn btn-primary" onclick="showAccounts()">List All Accounts</button>
+    </div>
+    <div id="form-section" style="display:none;"></div>
+    <div id="accounts-section" style="display:none;"></div>
+  </div>
+  <script>
+    // Simple in-memory "database"
+    let accounts = [];
+
+    function showAddForm() {
+      document.getElementById('form-section').style.display = 'block';
+      document.getElementById('accounts-section').style.display = 'none';
+      document.getElementById('form-section').innerHTML = `
+        <h3>Add New Account</h3>
+        <form id="addAccountForm" onsubmit="addAccount(event)">
+          <input type="number" name="accNo" placeholder="Account No" required class="form-control"><br>
+          <input type="text" name="name" placeholder="Name" required class="form-control"><br>
+          <input type="text" name="des" placeholder="Designation" required class="form-control"><br>
+          <input type="text" name="add" placeholder="Address" required class="form-control"><br>
+          <input type="number" name="ba" placeholder="Basic Salary" required class="form-control"><br>
+          <input type="number" name="da" placeholder="Dearness Allowance" required class="form-control"><br>
+          <input type="number" name="ta" placeholder="Travelling Allowance" required class="form-control"><br>
+          <input type="number" name="hra" placeholder="House Rent Allowance" required class="form-control"><br>
+          <input type="number" name="pf" placeholder="Provident Fund" required class="form-control"><br>
+          <input type="number" name="esi" placeholder="Employee State Insurance" required class="form-control"><br>
+          <button type="submit" class="btn btn-primary">Add Account</button>
+          <button type="button" class="btn" onclick="hideForms()">Cancel</button>
+        </form>
+      `;
+    }
+
+    function addAccount(event) {
+      event.preventDefault();
+      const form = event.target;
+      const accNo = parseInt(form.accNo.value);
+      if (accounts.some(a => a.accNo === accNo)) {
+        showAlert('Account number already exists!', 'danger');
+        return;
+      }
+      const account = {
+        accNo,
+        name: form.name.value,
+        des: form.des.value,
+        add: form.add.value,
+        ba: parseInt(form.ba.value),
+        da: parseInt(form.da.value),
+        ta: parseInt(form.ta.value),
+        hra: parseInt(form.hra.value),
+        pf: parseInt(form.pf.value),
+        esi: parseInt(form.esi.value)
+      };
+      account.gs = account.ba + account.da + account.ta + account.hra;
+      account.gd = account.pf + account.esi;
+      account.ns = account.gs - account.gd;
+      accounts.push(account);
+      showAlert('Account created successfully!', 'success');
+      hideForms();
+      showAccounts();
+    }
+
+    function showAccounts() {
+      document.getElementById('form-section').style.display = 'none';
+      document.getElementById('accounts-section').style.display = 'block';
+      let html = `<h3>All Accounts</h3>
+      <table>
+        <tr>
+          <th>Acc No</th><th>Name</th><th>Designation</th><th>Address</th>
+          <th>Basic</th><th>DA</th><th>TA</th><th>HRA</th>
+          <th>Gross Salary</th><th>PF</th><th>ESI</th><th>Gross Deduction</th><th>Net Salary</th>
+          <th>Actions</th>
+        </tr>`;
+      accounts.forEach((a, idx) => {
+        html += `<tr>
+          <td>${a.accNo}</td>
+          <td>${a.name}</td>
+          <td>${a.des}</td>
+          <td>${a.add}</td>
+          <td>${a.ba}</td>
+          <td>${a.da}</td>
+          <td>${a.ta}</td>
+          <td>${a.hra}</td>
+          <td>${a.gs}</td>
+          <td>${a.pf}</td>
+          <td>${a.esi}</td>
+          <td>${a.gd}</td>
+          <td>${a.ns}</td>
+          <td>
+            <button class="btn btn-warning" onclick="showModifyForm(${a.accNo})">Modify</button>
+            <button class="btn btn-danger" onclick="deleteAccount(${a.accNo})">Delete</button>
+          </td>
+        </tr>`;
+      });
+      html += `</table>
+        <button class="btn btn-primary" onclick="showAddForm()">Add New Account</button>
+        <button class="btn" onclick="hideForms()">Back</button>
+      `;
+      document.getElementById('accounts-section').innerHTML = html;
+    }
+
+    function deleteAccount(accNo) {
+      if (!confirm('Delete this account?')) return;
+      accounts = accounts.filter(a => a.accNo !== accNo);
+      showAlert(`Account ${accNo} deleted.`, 'danger');
+      showAccounts();
+    }
+
+    function showModifyForm(accNo) {
+      const a = accounts.find(x => x.accNo === accNo);
+      if (!a) return;
+      document.getElementById('form-section').style.display = 'block';
+      document.getElementById('accounts-section').style.display = 'none';
+      document.getElementById('form-section').innerHTML = `
+        <h3>Modify Account #${a.accNo}</h3>
+        <form id="modifyAccountForm" onsubmit="modifyAccount(event, ${a.accNo})">
+          <input type="text" name="name" value="${a.name}" required class="form-control"><br>
+          <input type="text" name="des" value="${a.des}" required class="form-control"><br>
+          <input type="text" name="add" value="${a.add}" required class="form-control"><br>
+          <input type="number" name="ba" value="${a.ba}" required class="form-control"><br>
+          <input type="number" name="da" value="${a.da}" required class="form-control"><br>
+          <input type="number" name="ta" value="${a.ta}" required class="form-control"><br>
+          <input type="number" name="hra" value="${a.hra}" required class="form-control"><br>
+          <input type="number" name="pf" value="${a.pf}" required class="form-control"><br>
+          <input type="number" name="esi" value="${a.esi}" required class="form-control"><br>
+          <button type="submit" class="btn btn-primary">Save Changes</button>
+          <button type="button" class="btn" onclick="hideForms()">Cancel</button>
+        </form>
+      `;
+    }
+
+    function modifyAccount(event, accNo) {
+      event.preventDefault();
+      const form = event.target;
+      const a = accounts.find(x => x.accNo === accNo);
+      if (!a) return;
+      a.name = form.name.value;
+      a.des = form.des.value;
+      a.add = form.add.value;
+      a.ba = parseInt(form.ba.value);
+      a.da = parseInt(form.da.value);
+      a.ta = parseInt(form.ta.value);
+      a.hra = parseInt(form.hra.value);
+      a.pf = parseInt(form.pf.value);
+      a.esi = parseInt(form.esi.value);
+      a.gs = a.ba + a.da + a.ta + a.hra;
+      a.gd = a.pf + a.esi;
+      a.ns = a.gs - a.gd;
+      showAlert('Account modified.', 'success');
+      hideForms();
+      showAccounts();
+    }
+
+    function hideForms() {
+      document.getElementById('form-section').style.display = 'none';
+      document.getElementById('accounts-section').style.display = 'none';
+    }
+
+    function showAlert(msg, type) {
+      const alerts = document.getElementById('alerts');
+      alerts.innerHTML = `<div class="alert alert-${type}">${msg}</div>`;
+      setTimeout(() => { alerts.innerHTML = ''; }, 2000);
+    }
+  </script>
+</body>
+</html>
