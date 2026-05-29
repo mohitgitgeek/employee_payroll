@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block title %}ML Insights{% endblock %}
+{% block content %}
+  <h2>📊 Payroll ML Insights</h2>
+  <p class="muted">An <strong>IsolationForest</strong> model (scikit-learn) inspects every salary record
+     across BA, DA, TA, HRA, PF, ESI and net salary, and flags records that deviate from the rest as
+     potential data-entry errors or outliers worth reviewing.</p>
+
+  {% if summary %}
+  <div class="cards">
+    <div class="card"><div class="num">{{ summary.total }}</div><div>Records analysed</div></div>
+    <div class="card"><div class="num">{{ summary.avg_net }}</div><div>Average net salary</div></div>
+    <div class="card"><div class="num">{{ summary.max_net }}</div><div>Highest net salary</div></div>
+    <div class="card"><div class="num">{{ summary.min_net }}</div><div>Lowest net salary</div></div>
+  </div>
+  {% else %}
+  <p class="muted">Add some accounts to see insights.</p>
+  {% endif %}
+
+  {% if not model_used and accounts %}
+    <p class="muted" style="margin-top:18px">ℹ️ Need at least 5 accounts to run the anomaly model — add more to enable it.</p>
+  {% endif %}
+
+  {% if model_used %}
+    <h3 style="margin-top:24px">Flagged anomalies</h3>
+    {% if anomalies %}
+    <table>
+      <tr><th>Acc No</th><th>Name</th><th>Designation</th><th>Net Salary</th><th>Anomaly score</th></tr>
+      {% for item in anomalies %}
+      <tr class="anomaly">
+        <td>{{ item.acc.accNo }}</td>
+        <td>{{ item.acc.name }}</td>
+        <td>{{ item.acc.des }}</td>
+        <td>{{ item.acc.ns }}</td>
+        <td>{{ item.score }}</td>
+      </tr>
+      {% endfor %}
+    </table>
+    <p class="muted">Lower (more negative) scores mean the record is more unusual relative to the others.</p>
+    {% else %}
+    <p class="muted">✅ No anomalous salary records detected.</p>
+    {% endif %}
+  {% endif %}
+{% endblock %}

@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block content %}
+  <h1>Payroll Management System</h1>
+  <p class="muted">Store and manage employee salary records, backed by a SQLite database with ML-powered anomaly detection.</p>
+  <div class="cards">
+    <div class="card">
+      <div class="num">{{ count }}</div>
+      <div>Employee accounts on file</div>
+    </div>
+  </div>
+  <div class="actions">
+    <a class="btn btn-primary" href="{{ url_for('add_account') }}">Add New Account</a>
+    <a class="btn btn-secondary" href="{{ url_for('list_accounts') }}">View All Accounts</a>
+    <a class="btn btn-secondary" href="{{ url_for('insights') }}">View ML Insights</a>
+  </div>
+{% endblock %}

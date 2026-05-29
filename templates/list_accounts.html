@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% block title %}All Accounts{% endblock %}
+{% block content %}
+  <h2>All Employee Accounts</h2>
+  {% if accounts %}
+  <table>
+    <tr>
+      <th>Acc No</th><th>Name</th><th>Designation</th><th>Address</th>
+      <th>Basic</th><th>DA</th><th>TA</th><th>HRA</th>
+      <th>Gross</th><th>PF</th><th>ESI</th><th>Deduction</th><th>Net</th><th>Actions</th>
+    </tr>
+    {% for a in accounts %}
+    <tr>
+      <td>{{ a.accNo }}</td>
+      <td>{{ a.name }}</td>
+      <td>{{ a.des }}</td>
+      <td>{{ a.add }}</td>
+      <td>{{ a.ba }}</td>
+      <td>{{ a.da }}</td>
+      <td>{{ a.ta }}</td>
+      <td>{{ a.hra }}</td>
+      <td>{{ a.gs }}</td>
+      <td>{{ a.pf }}</td>
+      <td>{{ a.esi }}</td>
+      <td>{{ a.gd }}</td>
+      <td><strong>{{ a.ns }}</strong></td>
+      <td>
+        <a class="btn btn-warning" href="{{ url_for('modify_account', accNo=a.accNo) }}">Modify</a>
+        <form method="POST" action="{{ url_for('delete_account', accNo=a.accNo) }}" style="display:inline"
+              onsubmit="return confirm('Delete account {{ a.accNo }}?');">
+          <button type="submit" class="btn btn-danger">Delete</button>
+        </form>
+      </td>
+    </tr>
+    {% endfor %}
+  </table>
+  {% else %}
+  <p class="muted">No accounts yet.</p>
+  {% endif %}
+  <a class="btn btn-primary" href="{{ url_for('add_account') }}">Add New Account</a>
+{% endblock %}

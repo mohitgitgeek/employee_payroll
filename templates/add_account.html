@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block title %}Add Account{% endblock %}
+{% block content %}
+  <h2>Add New Account</h2>
+  <form method="POST" action="{{ url_for('add_account') }}">
+    <div class="form-grid">
+      <label>Account No<input type="number" name="accNo" required></label>
+      <label>Name<input type="text" name="name" required></label>
+      <label>Designation<input type="text" name="des"></label>
+      <label>Address<input type="text" name="add"></label>
+      <label>Basic Salary (BA)<input type="number" name="ba" value="0"></label>
+      <label>Dearness Allowance (DA)<input type="number" name="da" value="0"></label>
+      <label>Travelling Allowance (TA)<input type="number" name="ta" value="0"></label>
+      <label>House Rent Allowance (HRA)<input type="number" name="hra" value="0"></label>
+      <label>Provident Fund (PF)<input type="number" name="pf" value="0"></label>
+      <label>Employee State Insurance (ESI)<input type="number" name="esi" value="0"></label>
+    </div>
+    <div class="actions">
+      <button type="submit" class="btn btn-primary">Add Account</button>
+      <a href="{{ url_for('list_accounts') }}" class="btn btn-secondary">Cancel</a>
+    </div>
+  </form>
+{% endblock %}

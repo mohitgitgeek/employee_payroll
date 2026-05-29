@@ -1,276 +1,162 @@
+"""Employee Payroll Management System.
+
+Originally a console program that pickled `Account` objects to a flat file, this
+is now a full Flask web app backed by a SQLite database (via SQLAlchemy) with an
+ML-powered "Insights" page that flags anomalous salary records using an
+IsolationForest model.
+"""
 from flask import Flask, render_template, request, redirect, url_for, flash
-import pickle
+from flask_sqlalchemy import SQLAlchemy
 import os
-import pathlib
 
 app = Flask(__name__)
-app.secret_key = 'your_secret_key'  # Needed for flash messages
+app.secret_key = os.environ.get('FLASK_SECRET', 'payroll_secret_key')
 
-# --- Your Account class (unchanged except for input/output) ---
-class Account:
-    def __init__(self, accNo=0, name='', des='', add='', ba=0, da=0, ta=0, hra=0, pf=0, esi=0):
-        self.accNo = accNo
-        self.name = name
-        self.des = des
-        self.add = add
-        self.ba = ba
-        self.da = da
-        self.ta = ta
-        self.hra = hra
-        self.gs = ba + da + ta + hra
-        self.pf = pf
-        self.esi = esi
-        self.gd = pf + esi
-        self.ns = self.gs - self.gd
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+db_path = os.path.join(BASE_DIR, 'payroll.db')
+app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///' + db_path.replace('\\', '/')
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
-    def to_dict(self):
-        return self.__dict__
+db = SQLAlchemy(app)
 
-# --- Helper functions for file operations ---
-def load_accounts():
-    file = pathlib.Path("accounts.data")
-    if file.exists():
-        with open('accounts.data', 'rb') as infile:
-            try:
-                return pickle.load(infile)
-            except EOFError:
-                return []
-    return []
 
-def save_accounts(accounts):
-    with open('accounts.data', 'wb') as outfile:
-        pickle.dump(accounts, outfile)
+class Account(db.Model):
+    __tablename__ = 'accounts'
+    id = db.Column(db.Integer, primary_key=True)
+    accNo = db.Column(db.Integer, unique=True, nullable=False)
+    name = db.Column(db.String(120), nullable=False)
+    des = db.Column(db.String(120))   # designation
+    add = db.Column(db.String(200))   # address
+    ba = db.Column(db.Integer, default=0)   # basic
+    da = db.Column(db.Integer, default=0)   # dearness allowance
+    ta = db.Column(db.Integer, default=0)   # travelling allowance
+    hra = db.Column(db.Integer, default=0)  # house rent allowance
+    pf = db.Column(db.Integer, default=0)   # provident fund
+    esi = db.Column(db.Integer, default=0)  # employee state insurance
 
-# --- Routes ---
+    # Derived salary figures (kept as properties so they stay consistent).
+    @property
+    def gs(self):
+        return (self.ba or 0) + (self.da or 0) + (self.ta or 0) + (self.hra or 0)
+
+    @property
+    def gd(self):
+        return (self.pf or 0) + (self.esi or 0)
+
+    @property
+    def ns(self):
+        return self.gs - self.gd
+
+
+with app.app_context():
+    db.create_all()
+
+
+def _form_int(field, default=0):
+    try:
+        return int(request.form.get(field, default))
+    except (TypeError, ValueError):
+        return default
+
+
 @app.route('/')
 def index():
-    return render_template('index.html')
+    count = Account.query.count()
+    return render_template('index.html', count=count)
+
 
 @app.route('/accounts')
 def list_accounts():
-    accounts = load_accounts()
+    accounts = Account.query.order_by(Account.accNo).all()
     return render_template('list_accounts.html', accounts=accounts)
+
 
 @app.route('/add', methods=['GET', 'POST'])
 def add_account():
     if request.method == 'POST':
-        # Get form data
-        accNo = int(request.form['accNo'])
-        name = request.form['name']
-        des = request.form['des']
-        add = request.form['add']
-        ba = int(request.form['ba'])
-        da = int(request.form['da'])
-        ta = int(request.form['ta'])
-        hra = int(request.form['hra'])
-        pf = int(request.form['pf'])
-        esi = int(request.form['esi'])
-        # Create and save account
-        account = Account(accNo, name, des, add, ba, da, ta, hra, pf, esi)
-        accounts = load_accounts()
-        # Prevent duplicate account numbers
-        if any(a.accNo == accNo for a in accounts):
+        accNo = _form_int('accNo')
+        if Account.query.filter_by(accNo=accNo).first():
             flash('Account number already exists!', 'danger')
             return redirect(url_for('add_account'))
-        accounts.append(account)
-        save_accounts(accounts)
+        account = Account(
+            accNo=accNo,
+            name=request.form.get('name', '').strip(),
+            des=request.form.get('des', '').strip(),
+            add=request.form.get('add', '').strip(),
+            ba=_form_int('ba'), da=_form_int('da'), ta=_form_int('ta'),
+            hra=_form_int('hra'), pf=_form_int('pf'), esi=_form_int('esi'),
+        )
+        db.session.add(account)
+        db.session.commit()
         flash('Account created successfully!', 'success')
         return redirect(url_for('list_accounts'))
     return render_template('add_account.html')
 
-@app.route('/delete/<int:accNo>')
-def delete_account(accNo):
-    accounts = load_accounts()
-    accounts = [a for a in accounts if a.accNo != accNo]
-    save_accounts(accounts)
-    flash(f'Account {accNo} deleted.', 'info')
-    return redirect(url_for('list_accounts'))
 
 @app.route('/modify/<int:accNo>', methods=['GET', 'POST'])
 def modify_account(accNo):
-    accounts = load_accounts()
-    account = next((a for a in accounts if a.accNo == accNo), None)
+    account = Account.query.filter_by(accNo=accNo).first()
     if not account:
         flash('Account not found.', 'danger')
         return redirect(url_for('list_accounts'))
     if request.method == 'POST':
-        # Update account details
-        account.name = request.form['name']
-        account.des = request.form['des']
-        account.add = request.form['add']
-        account.ba = int(request.form['ba'])
-        account.da = int(request.form['da'])
-        account.ta = int(request.form['ta'])
-        account.hra = int(request.form['hra'])
-        account.pf = int(request.form['pf'])
-        account.esi = int(request.form['esi'])
-        account.gs = account.ba + account.da + account.ta + account.hra
-        account.gd = account.pf + account.esi
-        account.ns = account.gs - account.gd
-        save_accounts(accounts)
+        account.name = request.form.get('name', '').strip()
+        account.des = request.form.get('des', '').strip()
+        account.add = request.form.get('add', '').strip()
+        account.ba = _form_int('ba'); account.da = _form_int('da')
+        account.ta = _form_int('ta'); account.hra = _form_int('hra')
+        account.pf = _form_int('pf'); account.esi = _form_int('esi')
+        db.session.commit()
         flash('Account modified.', 'success')
         return redirect(url_for('list_accounts'))
     return render_template('modify_account.html', account=account)
 
+
+@app.route('/delete/<int:accNo>', methods=['POST', 'GET'])
+def delete_account(accNo):
+    account = Account.query.filter_by(accNo=accNo).first()
+    if account:
+        db.session.delete(account)
+        db.session.commit()
+        flash(f'Account {accNo} deleted.', 'info')
+    return redirect(url_for('list_accounts'))
+
+
+@app.route('/insights')
+def insights():
+    """ML insights: flag salary records that look anomalous using IsolationForest."""
+    accounts = Account.query.order_by(Account.accNo).all()
+    anomalies, summary, model_used = [], {}, False
+
+    if accounts:
+        net_salaries = [a.ns for a in accounts]
+        summary = {
+            'total': len(accounts),
+            'avg_net': round(sum(net_salaries) / len(net_salaries), 2),
+            'max_net': max(net_salaries),
+            'min_net': min(net_salaries),
+        }
+
+    # IsolationForest needs a few samples to be meaningful.
+    if len(accounts) >= 5:
+        try:
+            import numpy as np
+            from sklearn.ensemble import IsolationForest
+            X = np.array([[a.ba, a.da, a.ta, a.hra, a.pf, a.esi, a.ns] for a in accounts])
+            clf = IsolationForest(contamination=0.2, random_state=42)
+            preds = clf.fit_predict(X)            # -1 = anomaly, 1 = normal
+            scores = clf.score_samples(X)
+            for acc, p, s in zip(accounts, preds, scores):
+                if p == -1:
+                    anomalies.append({'acc': acc, 'score': round(float(s), 3)})
+            model_used = True
+        except Exception as e:
+            app.logger.warning('IsolationForest unavailable: %s', e)
+
+    return render_template('insights.html', accounts=accounts, anomalies=anomalies,
+                           summary=summary, model_used=model_used)
+
+
 if __name__ == '__main__':
-    app.run(debug=True)
-
-#OLD VERSION :
-'''import pickle
-import os
-import pathlib
-
-class Account:
-    def __init__(self):
-        self.accNo = 0
-        self.name = ''
-        self.des = ''
-        self.add = ''
-        self.ba = 0
-        self.da = 0
-        self.ta = 0
-        self.hra = 0
-        self.pf = 0
-        self.esi = 0
-        self.gs = 0
-        self.gd = 0
-        self.ns = 0
-    
-    def createAccount(self):
-        self.accNo = int(input("Enter the account no : "))
-        self.name = input("Enter the employer's name : ")
-        self.des = input("Enter the employer's designation: ")
-        self.add = input("Enter the employer's address: ")
-        self.ba = int(input("Enter basic salary of employee (in rupees): "))
-        self.da = int(input("Enter dearness allowance of the employee (in rupees): "))
-        self.ta = int(input("Enter travelling allowance of the employee(in rupees): "))
-        self.hra = int(input("Enter house rent allowance of the employee (in rupees): "))
-        self.gs = self.ba + self.da + self.ta + self.hra
-        self.pf = int(input("Enter provident fund of the employee (in rupees): "))
-        self.esi = int(input("Enter employee state insurance of the employee(in rupees): "))
-        self.gd = self.pf + self.esi
-        self.ns = self.gs - self.gd
-        print("\n\n\nPayroll information stored.\n")
-
-    def showAccount(self):
-        print("Account Number : ", self.accNo)
-        print("Account Holder Name : ", self.name)
-        print("Designation :", self.des)
-        print("Address:", self.add)
-        print("Basic Salary: ", self.ba)
-        print("Dearness Allowance: ", self.da)
-        print("Travelling Allowance: ", self.ta)
-        print("House Rent Allowance: ", self.hra)
-        print("Gross Salary:", self.gs)
-        print("Provident fund: ", self.pf)
-        print("Employee state insurance : ", self.esi)
-        print("Gross Deduction", self.gd)
-        print("Net salary", self.ns)
-        
-def intro():
-    print("\t\t\t\t**************************")
-    print("\t\t\t\tPAYROLL MANAGEMENT SYSTEM")
-    print("\t\t\t\t**************************")
-
-def writeAccount():
-    account = Account()
-    account.createAccount()
-    writeAccountsFile(account)
-
-def displayAll():
-    file = pathlib.Path("accounts.data")
-    if file.exists():
-        infile = open('accounts.data', 'rb')
-        try:
-            mylist = pickle.load(infile)
-            print()
-            for item in mylist:
-                item.showAccount()
-                print("\n----------------------\n")
-        except EOFError:
-            print("No records to display")
-        infile.close()
-    else:
-        print("No records to display")
-
-def deleteAccount(num):
-    file = pathlib.Path("accounts.data")
-    if file.exists():
-        infile = open('accounts.data', 'rb')
-        try:
-            oldlist = pickle.load(infile)
-        except EOFError:
-            oldlist = []
-        infile.close()
-        newlist = [item for item in oldlist if item.accNo != num]
-        os.remove('accounts.data')
-        with open('accounts.data', 'wb') as outfile:
-            pickle.dump(newlist, outfile)
-        print(f"Account number {num} has been deleted.")
-    else:
-        print("No records to delete")
-
-def modifyAccount(num):
-    file = pathlib.Path("accounts.data")
-    if file.exists():
-        infile = open('accounts.data', 'rb')
-        try:
-            oldlist = pickle.load(infile)
-        except EOFError:
-            oldlist = []
-        infile.close()
-        os.remove('accounts.data')
-        for item in oldlist:
-            if item.accNo == num:
-                print("Modifying account details for account number:", num)
-                item.createAccount()  # re-uses the input method to modify details
-        with open('accounts.data', 'wb') as outfile:
-            pickle.dump(oldlist, outfile)
-        print(f"Account number {num} has been modified.")
-    else:
-        print("No records to modify")
-
-def writeAccountsFile(account):
-    file = pathlib.Path("accounts.data")
-    if file.exists():
-        infile = open('accounts.data', 'rb')
-        try:
-            oldlist = pickle.load(infile)
-        except EOFError:
-            oldlist = []
-        oldlist.append(account)
-        infile.close()
-    else:
-        oldlist = [account]
-    with open('accounts.data', 'wb') as outfile:
-        pickle.dump(oldlist, outfile)
-
-# Start of the program
-ch = ''
-intro()
-
-while ch != '5':
-    print("\tMAIN MENU")
-    print("\t1. NEW ACCOUNT")
-    print("\t2. ALL ACCOUNT HOLDER LIST")
-    print("\t3. CLOSE AN ACCOUNT")
-    print("\t4. MODIFY AN ACCOUNT")
-    print("\t5. EXIT")
-    ch = input("\tSelect Your Option (1-5):") 
-    
-    if ch == '1': 
-        writeAccount()
-    elif ch == '2':
-        displayAll()
-    elif ch == '3':
-        num = int(input("\tEnter the account No. to delete: "))
-        deleteAccount(num)
-    elif ch == '4':
-        num = int(input("\tEnter the account No. to modify: "))
-        modifyAccount(num)
-    elif ch == '5':
-        print("\tThanks for using Payroll Management System")
-        break
-    else:
-        print("Invalid choice.")
-'''
+    port = int(os.environ.get('PORT', '5000'))
+    app.run(host='0.0.0.0', port=port, debug=True)

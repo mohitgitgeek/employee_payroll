@@ -1,15 +1,25 @@
 # employee_payroll
 
-This was my Grade 12 Python project where I took certain salaries of employees , stored them and updated them.
+This started as my Grade 12 Python console project (salaries stored in a pickled flat file). It is now a
+full-stack web application:
 
-![Main Page]![image](https://github.com/user-attachments/assets/9379fdc4-c476-434a-95f6-766597394dde)
+- **Frontend:** server-rendered Jinja templates (`templates/`) with a clean UI.
+- **Backend:** Flask (`employee_payroll.py`) with add / list / modify / delete routes.
+- **Database:** SQLite via SQLAlchemy (`payroll.db`, created automatically) — replaces the old pickle file.
+- **Machine Learning:** an `IsolationForest` model (scikit-learn) on the **ML Insights** page flags
+  anomalous salary records (potential data-entry errors / outliers) across BA, DA, TA, HRA, PF, ESI and net salary.
 
-The UI of the System.
+![Main Page](https://github.com/user-attachments/assets/9379fdc4-c476-434a-95f6-766597394dde)
 
-How to run it :
+## How to run it
 
-1) Clone this repo.
-2) Run it.
+```sh
+pip install -r requirements.txt
+python employee_payroll.py
+# open http://localhost:5000
+```
+
+The original console program is preserved (commented out) at the bottom of `employee_payroll.py`.
 
 ## Deploy to GitHub Pages
 
